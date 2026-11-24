@@ -1,38 +1,38 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
-// One word, one username: the entrant's own make.fun handle, nothing else.
-// The judge's first criterion is that the entry is a real make.fun username,
-// the entrant's own handle sent as one word, so the word is fixed: orchdhaaa.
-const WORD = "orchdhaaa";
+const ENTRY = "orchdhaaa";
 
-function resolveOutDir(): string {
-  return (
-    process.env.MAKEFUN_OUTPUT_DIR ?? process.env.OUTPUT_DIR ?? "/output"
-  );
+function fail(message) {
+  console.error(`error: ${message}`);
+  process.exit(1);
 }
 
-function writeEntry(word: string, outDir: string): string {
-  // The gate only accepts UTF-8 text of 1 to 30 characters that is not
-  // whitespace-only, and the entry must be exactly one word, so verify the
-  // word meets the gate and holds no whitespace before writing it.
-  const codePoints = [...word].length;
-  if (codePoints < 1 || codePoints > 30 || word.trim().length === 0) {
-    throw new Error(
-      `entry word is ${codePoints} code points, outside the 1-30 gate`,
-    );
+function validateEntry(value) {
+  const bytes = Buffer.from(value, "utf8");
+  if (bytes.length < 1 || bytes.length > 30) {
+    fail("entry must be 1-30 bytes");
   }
-  if (/\s/.test(word)) {
-    throw new Error("entry must be exactly one word with no whitespace");
+  if (bytes.length !== value.length) {
+    fail("entry must be plain ASCII");
   }
-  mkdirSync(outDir, { recursive: true });
-  const outFile = `${outDir}/entry.txt`;
-  writeFileSync(outFile, word, "utf8");
-  const back = readFileSync(outFile, "utf8");
-  if (back !== word) {
-    throw new Error("read-back mismatch: written file differs from the word");
+  if (/\s/.test(value)) {
+    fail("entry must be a single word with no whitespace");
   }
-  return outFile;
+  return bytes;
 }
 
-const outFile = writeEntry(WORD, resolveOutDir());
-console.log(`wrote ${[...WORD].length} code points to ${outFile}`);
+const entryBytes = validateEntry(ENTRY);
+
+const outDir = process.env.MAKEFUN_OUTPUT_DIR || "/output";
+mkdirSync(outDir, { recursive: true });
+
+const target = join(outDir, "entry.txt");
+writeFileSync(target, ENTRY, "utf8");
+
+const back = readFileSync(target);
+if (!back.equals(entryBytes)) {
+  fail("read-back mismatch after writing entry.txt");
+}
+
+console.log(`wrote ${target} (${ENTRY.length} chars)`);
